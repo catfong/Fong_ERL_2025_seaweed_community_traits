@@ -1,0 +1,218 @@
+---
+title: "barcharts"
+author: "CRF"
+date: "2023-03-09"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r run the analysis}
+library(multcomp)
+library(car)
+head(year_by_traits)
+colnames(year_by_traits)<-c("year", "site", "habitat", "trans", 
+                            "T", "WW.H", "H", "SA.WW", 
+                            "total")
+
+#height doesn't pass. residuals look fine
+height<-(lm(sqrt(H)~year*habitat, data=year_by_traits))
+shapiro.test(residuals(height))
+plot(residuals(height))
+bartlett.test(H~interaction(year,habitat), data=year_by_traits) #no pass
+anova(height) #sig interation
+height_rank<-aov(rank(H)~year*habitat, data=year_by_traits) #p 0.0005
+Anova(height_rank) #still a sig interation
+
+pen<-(lm(T~year*habitat, data=year_by_traits))
+shapiro.test(residuals(pen))
+plot(residuals(pen))
+bartlett.test(T~interaction(year,habitat), data=year_by_traits) #no pass
+anova(pen) #sig interaction
+pen_rank<-aov(rank(T)~year*habitat, data=year_by_traits) #p 0.0005
+Anova(pen_rank) #still a sig interation
+
+sa.ww<-(lm(SA.WW~year*habitat, data=year_by_traits))
+shapiro.test(residuals(sa.ww))
+plot(residuals(sa.ww))
+bartlett.test(SA.WW~interaction(year,habitat), data=year_by_traits) #no pass
+anova(sa.ww)#sig year
+sa.ww_rank<-aov(rank(SA.WW)~year*habitat, data=year_by_traits) #p 0.0005
+Anova(sa.ww_rank) #sig year
+
+ww.h<-(lm(WW.H~year*habitat, data=year_by_traits))
+shapiro.test(residuals(ww.h))
+plot(residuals(ww.h))
+bartlett.test(WW.H~interaction(year,habitat), data=year_by_traits) #no pass
+anova(ww.h) #sig interaction
+ww.h_rank<-aov(rank(WW.H)~year*habitat, data=year_by_traits) #p 0.0005
+Anova(ww.h_rank) #sig interaction
+
+
+```
+
+```{r Summary SE Function}
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+    library(plyr)
+
+    # New version of length which can handle NA's: if na.rm==T, don't count them
+    length2 <- function (x, na.rm=FALSE) {
+        if (na.rm) sum(!is.na(x))
+        else       length(x)
+    }
+
+    # This does the summary. For each group's data frame, return a vector with
+    # N, mean, and sd
+    datac <- ddply(data, groupvars, .drop=.drop,
+      .fun = function(xx, col) {
+        c(N    = length2(xx[[col]], na.rm=na.rm),
+          mean = mean   (xx[[col]], na.rm=na.rm),
+          sd   = sd     (xx[[col]], na.rm=na.rm)
+        )
+      },
+      measurevar
+    )
+
+    # Rename the "mean" column    
+    datac <- rename(datac, c("mean" = measurevar))
+
+    datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+
+    # Confidence interval multiplier for standard error
+    # Calculate t-statistic for confidence interval: 
+    # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+    ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+    datac$ci <- datac$se * ciMult
+
+    return(datac)
+}
+
+```
+
+
+```{r bar plots}
+library(plyr); library(dplyr)
+head(year_by_traits)
+
+#saving as 300 x 200
+
+#####Length
+
+length_sum <- summarySE(year_by_traits, measurevar="H", groupvars=c("habitat",  "year"))
+length_sum$year<-as.factor(length_sum$year)
+
+height_backreef<-ggplot(subset(length_sum, habitat=="Backreef"), aes(x=year, y=H, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=H-se, ymax=H+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+height_fringing<-ggplot(subset(length_sum, habitat=="Fringing"), aes(x=year, y=H, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=H-se, ymax=H+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+#####penetrometer
+
+pen_sum <- summarySE(year_by_traits, measurevar="T", groupvars=c("habitat",  "year"))
+pen_sum$year<-as.factor(pen_sum$year)
+
+pen_backreef<-ggplot(subset(pen_sum, habitat=="Backreef"), aes(x=year, y=T, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=T-se, ymax=T+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+pen_fringing<-ggplot(subset(pen_sum, habitat=="Fringing"), aes(x=year, y=T, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=T-se, ymax=T+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+
+#####SA:DW
+
+sa.ww_sum <- summarySE(year_by_traits, measurevar="SA.WW", groupvars=c("habitat",  "year"))
+sa.ww_sum$year<-as.factor(sa.ww_sum$year)
+
+sa.ww_backreef<-ggplot(subset(sa.ww_sum,habitat=="Backreef"), aes(x=year, y=SA.WW, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=SA.WW-se, ymax=SA.WW+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+sa.ww_fringing<-ggplot(subset(sa.ww_sum,habitat=="Fringing"), aes(x=year, y=SA.WW, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=SA.WW-se, ymax=SA.WW+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+
+#####h:ww
+
+ww.h_sum <- summarySE(year_by_traits, measurevar="WW.H", groupvars=c("habitat",  "year"))
+ww.h_sum$year<-as.factor(w.h_sum$year)
+
+w.h_backreef<-ggplot(subset(ww.h_sum, habitat=="Backreef"), aes(x=year, y=WW.H, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=WW.H-se, ymax=WW.H+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+w.h_fringing<-ggplot(subset(ww.h_sum, habitat=="Fringing"), aes(x=year, y=WW.H, group=year, fill=year)) + 
+  labs(x = "", y = "") +
+    geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_manual(values=colors)+
+  geom_errorbar(aes(ymin=WW.H-se, ymax=WW.H+se),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9))+
+    theme_classic()+ theme(legend.position = "none")+theme(axis.text.x=element_blank(),
+                                                           axis.text.y=element_blank())
+
+
+```
+
+```{r save}
+# save as 300x200
+height_fringing
+height_backreef
+
+pen_fringing
+pen_backreef
+
+sa.ww_fringing
+sa.ww_backreef
+
+w.h_fringing
+w.h_backreef
+```

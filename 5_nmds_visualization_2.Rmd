@@ -1,0 +1,134 @@
+---
+title: "5_visualization"
+author: "CRF"
+date: "2023-02-02"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r Backreef}
+library(viridis)
+library(ggpubr)
+library(vegan)
+library(ggdensity)
+
+en = envfit(NMDS[,5:6], year_by_traits[,5:9], permutations = 999, na.rm = TRUE)
+en_coord_cont = as.data.frame(scores(en, "vectors")) #* ordiArrowMul(en)
+
+Trait<-c("H", "DW:WW", "T", "SA:DW", "H:WW")
+loading<-(cbind(Trait, NMDS1=en_coord_cont$NMDS1, NMDS2=en_coord_cont$NMDS2))
+loading<-as.data.frame(loading)
+loading$NMDS1<-as.numeric(loading$NMDS1)
+loading$NMDS2<-as.numeric(loading$NMDS2)
+
+
+colfunc <- colorRampPalette(c("#C0C0C0", "#045D5D"))
+colors<-colfunc(10)
+
+
+egg<-ggplot()+
+    xlim(-1, 1)+ylim(-1, 1)+
+    scale_fill_continuous(low = "#578989", high = "#F6BE00")+
+stat_density_2d(data=subset(NMDS, habitat=="Backreef"), geom = "polygon", aes(x=NMDS1, y=NMDS2, fill = after_stat(level)), bins=100,  show.legend=FALSE, alpha=1)+
+  geom_text(data=loading, aes(x=NMDS1, y=NMDS2, label=Trait),hjust=0, vjust=0)+
+  geom_hline(yintercept=0, linetype="dashed", linewidth=0.25, color="grey")+ 
+  geom_vline(xintercept=0, linetype="dashed", linewidth=0.25, color="grey")+ 
+  geom_segment(data=loading, aes(xend=NMDS1, yend = NMDS2), linewidth=.5, arrow = arrow(length = unit(0.25, "cm")),
+               x = 0, y = 0, color = "black") +
+  geom_point(data=NMDS, aes(x=NMDS1, y=NMDS2), alpha=0.25, size=.25)+
+  theme_classic()
+
+xmax<-max(cent_2$NMDS1)
+ymax<-max(cent_2$NMDS2)
+xmin<-min(cent_2$NMDS1)
+ymin<-min(cent_2$NMDS2)
+
+#1200x500
+
+colfunc <- colorRampPalette(c("#F6BE00", "#045D5D"))
+
+colors<-colfunc(17)
+
+backreef_all<-ggplot(data=subset(cent_2, habitat=="Backreef"),
+                 aes(x=NMDS1, y=NMDS2, color=year, group=habitat))+
+  geom_point(size=2)+
+  geom_path()+
+  scale_color_manual(values=colors)+
+  xlim(xmin, xmax)+ylim(ymin, ymax)+
+  geom_hline(yintercept=0, linetype="dashed", linewidth=0.25)+ 
+  geom_vline(xintercept=0, linetype="dashed", size=0.25)+ 
+  geom_text(aes(label=year),hjust=0, vjust=0)+
+  theme_classic()+theme(legend.position = "none")
+
+fringing_all<-ggplot(data=subset(cent_2, habitat=="Fringing"),
+                 aes(x=NMDS1, y=NMDS2, color=year, group=habitat))+
+  geom_point(size=2)+
+  geom_path()+
+  scale_color_manual(values=colors)+
+  xlim(xmin, xmax)+ylim(ymin, ymax)+
+  geom_hline(yintercept=0, linetype="dashed", linewidth=0.25)+ 
+  geom_vline(xintercept=0, linetype="dashed", size=0.25)+ 
+  geom_text(aes(label=year),hjust=0, vjust=0)+
+  theme_classic()+theme(legend.position = "none")
+
+ggarrange(loading_plot, backreef_all, fringing_all, ncol=1)
+
+
+```
+
+```{r}
+library(corrplot)
+
+correlation<-cor(year_by_traits[5:9])
+cor<-corrplot(correlation, method="color", type="upper",order="hclust", tl.col="black", addCoef.col = 'black', number.cex = 0.8)#1000
+cor(year_by_traits[5:10])
+
+```
+
+LOESS smoothing is a non-parametric form of regression that uses a weighted, sliding-window, average to calculate a line of best fit. Within each "window", a weighted average is calculated, and the sliding window passes along the x-axis.
+
+One can control the size of this window with the span argument. The span element controls the alpha, which is the degree of smoothing. The smaller the span, the smaller the 'window', hence the noisier/ more jagged the line.
+
+Look for documentation under LOESS rather than span.
+
+```{r}
+
+normalized = (x-min(x))/(max(x)-min(x))
+
+df<-cbind(NMDS1=NMDS$NMDS1, NMDS2=NMDS$NMDS2,
+          H=((year_by_traits$H-min(year_by_traits$H))/(max(year_by_traits$H)-min(year_by_traits$H))), 
+          DW.WW=((year_by_traits$DW.WW-min(year_by_traits$DW.WW))/(max(year_by_traits$DW.WW)-min(year_by_traits$DW.WW))), 
+          P=((year_by_traits$P-min(year_by_traits$P))/(max(year_by_traits$P)-min(year_by_traits$P))),
+          SA.DW=((year_by_traits$SA.DW-min(year_by_traits$SA.DW))/(max(year_by_traits$SA.DW)-min(year_by_traits$SA.DW))),
+          H.WW=((year_by_traits$H.WW-min(year_by_traits$H.WW))/(max(year_by_traits$H.WW)-min(year_by_traits$H.WW))))
+
+df<-as.data.frame(df)
+
+min(df$NMDS1)
+NMDS1_reg<-ggplot(df)+
+  geom_smooth(aes(NMDS1, H, color="Height"))+
+  geom_smooth(aes(NMDS1, DW.WW, color="DW:WW"))+
+  geom_smooth(aes(NMDS1, P, color="P"))+
+  geom_smooth(aes(NMDS1, SA.DW, color="SA:DW"))+
+  geom_smooth(aes(NMDS1, H.WW, color="H:WW"))+
+  ylab("Value")+ xlim(-1, 1)+
+  theme_classic() + theme(legend.position="bottom")
+
+
+
+NMDS2_reg<-ggplot(df)+
+  stat_smooth(aes(NMDS2, H, color="Height"))+
+  geom_smooth(aes(NMDS2, DW.WW, color="DW:WW"))+
+  geom_smooth(aes(NMDS2, P, color="P"))+
+  geom_smooth(aes(NMDS2, SA.DW, color="SA:DW"))+
+  geom_smooth(aes(NMDS2, H.WW, color="H:WW"))+
+  ylab("Value")+xlim(-1, 1)+ylim(0, 1)+
+  theme_classic()+ theme(legend.position="bottom")
+
+loading_plot #6 x 5
+NMDS1_reg
+NMDS2_reg
+
+
+```

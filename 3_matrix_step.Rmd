@@ -1,0 +1,37 @@
+---
+title: "3_matrix_step"
+author: "CRF"
+date: "2023-02-01"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+The purpose of this script is to do the matrix calculations necessary to go from a species x time/place matrix and a species x traits matrix to a traits x time/place matrix
+
+```{r }
+
+library(vegan)
+
+algae_matrix<-algae_wide[5:27]
+
+algae_matrix<-as.matrix(algae_matrix)
+#make sure you run script 2 first!
+bbj<-data.matrix(bbj)
+str(algae_matrix)
+bbj<-t(bbj)
+year_by_traits<-(algae_matrix%*%bbj)/100
+
+year_by_traits<-as.data.frame(year_by_traits)
+year_by_traits<-cbind(algae_wide[1:4], year_by_traits)
+head(year_by_traits)
+year_by_traits$total<- rowSums( year_by_traits[,5:8] )
+#need to figure out where the 4 zeroes got entered. super weird
+year_by_traits<-subset(year_by_traits, total!=0) 
+
+
+```
+
+
+
+

@@ -1,0 +1,183 @@
+---
+title: "4.1_nmds_forked_supplement"
+author: "CRF"
+date: "2025-01-31"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r run the nmds}
+perm <- adonis2(year_by_traits[5:9] ~ year * habitat + site, 
+                permutations = 99999, 
+                data = year_by_traits, 
+                strata = year_by_traits$site)
+
+perm # two way interaction
+nmds<-metaMDS(year_by_traits[5:9], trymax=100, sfgrmin = 1e-9)
+
+NMDS1 = nmds$points[,1]
+NMDS2 = nmds$points[,2]
+NMDS_label = year_by_traits[1:4]
+NMDS<-cbind(NMDS_label, NMDS1, NMDS2)
+NMDS$year<-as.factor(NMDS$year)
+NMDS$trans<-as.factor(NMDS$trans)
+NMDS$site<-as.factor(NMDS$site)
+NMDS$habitat<-as.factor(NMDS$habitat)
+
+library(dplyr)
+library(tidyverse)
+library(ggrepel)
+library(gridExtra)
+```
+
+
+```{r}
+
+cent_2<-NMDS %>% 
+  group_by(year, habitat, site) %>% 
+  summarise(NMDS1=mean(NMDS1),NMDS2=mean(NMDS2)) %>%
+  as.data.frame() #53444
+
+
+
+```
+
+
+```{r}
+xmax<-max(cent_2$NMDS1)
+ymax<-max(cent_2$NMDS2)
+xmin<-min(cent_2$NMDS1)
+ymin<-min(cent_2$NMDS2)
+
+# Identify the first year for each site
+cent_2 <- cent_2 %>%
+  group_by(site, habitat) %>%
+  arrange(year) %>%
+  mutate(first_year = (year == first(year)))  # Flag first year as TRUE
+
+
+backreef_all <- ggplot(data = subset(cent_2, habitat == "Backreef"),
+                       aes(x = NMDS1, y = NMDS2, color = year)) +
+  # Trajectory lines first so points sit on top
+  geom_path(aes(group = site), arrow = arrow(type = "closed", length = unit(0.2, "inches"))) +  
+  # Regular points
+  geom_point(size = 2) +  
+  # Larger first-year points without removing them from paths
+  geom_point(data = subset(cent_2, habitat == "Backreef" & first_year), size = 5, shape = 21, fill = "white", stroke = 1) +  
+  # Axis limits
+  xlim(xmin, xmax) + ylim(ymin, ymax) +
+  # Dashed reference lines
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.25) + 
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.25) + 
+  # Theme adjustments
+  theme_classic() +
+  theme(legend.position = "bottom") +  
+  facet_wrap(~site, ncol=3, nrow=2)  # Faceted by site
+
+backreef_all
+
+
+
+fringing_all <- ggplot(data = subset(cent_2, habitat == "Fringing"),
+                       aes(x = NMDS1, y = NMDS2, color = year)) +
+  # Trajectory lines first so points sit on top
+  geom_path(aes(group = site), arrow = arrow(type = "closed", length = unit(0.2, "inches"))) +  
+  # Regular points
+  geom_point(size = 2) +  
+  # Larger first-year points without removing them from paths
+  geom_point(data = subset(cent_2, habitat == "Fringing" & first_year), size = 5, shape = 21, fill = "white", stroke = 1) +  
+  # Axis limits
+  xlim(xmin, xmax) + ylim(ymin, ymax) +
+  # Dashed reference lines
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.25) + 
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.25) + 
+  # Theme adjustments
+  theme_classic() +
+  theme(legend.position = "bottom") +  
+  facet_wrap(~site, ncol=3, nrow=2)  # Faceted by site
+
+
+fringing_all
+
+
+```
+
+
+```{r mean trait values by species}
+library(dplyr)
+library(broom)
+
+traits<-read.csv("species-traits-feb-2025.csv")
+
+df_long <- traits %>%
+  pivot_longer(cols = 5:8,  # Select all trait columns
+               names_to = "trait", 
+               values_to = "value")
+
+# Create the facet boxplot
+ggplot(df_long, aes(x = species, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~trait, scales = "free_y", ncol = 1) +  # Stack facets in one column
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, face = "italic")) +  # Italicize x-axis labels
+  labs(x = "Species", y = "Value", title = "Trait Variation Across Species")
+
+# Run ANOVAs for each trait separately and extract results
+anova_results <- traits %>%
+  pivot_longer(cols = 5:8, names_to = "trait", values_to = "value") %>%
+  group_by(trait) %>%
+  summarise(model = list(aov(value ~ species, data = cur_data()))) %>%
+  mutate(anova_summary = map(model, tidy)) %>%
+  unnest(anova_summary) %>%
+  select(trait, term, df, statistic, p.value)
+
+# View results
+print(anova_results)
+
+library(gt)
+
+anova_results %>%
+  filter(term == "species") %>%  # Keep only species effect
+  gt() %>%
+  fmt_number(columns = c(statistic, p.value), decimals = 3) %>%
+  cols_label(
+    trait = "Trait",
+    df = "DF",
+    statistic = "F-Value",
+    p.value = "P-Value"
+  ) %>%
+  tab_header(title = "ANOVA Results for Species Differences Across Traits") %>%
+  tab_source_note("Significance threshold: p < 0.05")
+
+# Calculate mean, median, and standard error (SE) for each species and trait
+summary_stats <- traits %>%
+  pivot_longer(cols = 5:8, names_to = "trait", values_to = "value") %>%
+  group_by(species, trait) %>%
+  summarise(
+    mean_value = mean(value, na.rm = TRUE),
+    median_value = median(value, na.rm = TRUE),
+    se_value = sd(value, na.rm = TRUE) / sqrt(n()),  # Standard Error
+    .groups = "drop"
+  )
+
+# Print the summary table
+summary_stats
+
+# Create a table for a paper using gt
+summary_stats %>%
+  gt() %>%
+  fmt_number(columns = c(mean_value, median_value, se_value), decimals = 3) %>%
+  cols_label(
+    species = "Species",
+    trait = "Trait",
+    mean_value = "Mean",
+    median_value = "Median",
+    se_value = "SE"
+  ) %>%
+  tab_header(title = "Summary Statistics for Each Species and Trait")
+
+
+
+```

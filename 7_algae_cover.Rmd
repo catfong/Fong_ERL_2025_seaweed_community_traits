@@ -1,0 +1,148 @@
+---
+title: "Untitled"
+author: "CRF"
+date: "2023-03-10"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+
+library(tidyverse)
+library(dplyr)
+
+#read in data
+benthic_data<-read.csv("~/Dropbox/BBJ Data/MCR_LTER_Annual_Survey_Benthic_Cover_20220311.csv")
+#remove redundant columns
+benthic_data<-benthic_data[,c(1, 4, 5, 6, 7, 8, 9)]
+#label columns
+colnames(benthic_data)<-c("year", "site", "habitat", "trans", "quad", "taxa", "per_cover")
+#remove lines where no data was entered (n=1)
+benthic_data<-benthic_data%>%drop_na(per_cover)
+#look at the taxa
+unique(benthic_data$taxa)
+#make the data long format
+benthic_data<-
+  benthic_data%>%
+  pivot_wider(names_from=taxa, 
+              values_from=per_cover)
+#fill empty spots with 0 coer
+benthic_data[is.na(benthic_data)] <- 0
+#relabel the column names
+algae<-benthic_data[, c("year", "site", "habitat", "trans", "quad",
+                        "Amansia rhodantha", "Turbinaria ornata",  
+                        "Dictyota sp.","Halimeda sp.", "Asparagopsis taxiformis",
+                        "Lobophora variegata", "Peyssonnelia inamoena", "Valonia aegagropila",
+                        "Dichotomaria marginata","Dichotomaria obtusata", 
+                        "Amphiroa fragilissima", "Dictyota friabilis", "Galaxaura sp.",
+                        "Caulerpa serrulata", "Liagora ceranoides", "Halimeda minima",
+                        "Dictyota bartayresiana", "Galaxaura rugosa","Halimeda opuntia",
+                        "Halimeda discoidea","Caulerpa racemosa","Galaxaura filamentosa",
+                        "Valonia ventricosa", "Cladophoropsis membranacea","Martensia elegans",
+                        "Halimeda distorta", "Dictyosphaeria versluysii",  
+                        "Actinotrichia fragilis","Microdictyon umbilicatum", 
+                        "Halimeda incrassata", "Jania sp.", "Dictyosphaeria cavernosa", 
+                        "Halimeda macroloba", "Dictyota hamifera","Gelidiella acerosa",
+                        "Caulerpa peltata" , "Dictyota implexa", "Peyssonnelia bornetii",
+                        "Microdictyon okamurae","Halimeda taenicola", 
+                        "Chlorodesmis fastigiata","Phyllodictyon anastomosans",
+                        "Chnoospora implexa","Codium geppiorum", "Gibsmithia hawaiiensis",
+                        "Peyssonnelia sp.","Cladophoropsis luxurians",
+                        "Neogoniolithon frutescens","Neomeris vanbosseae",
+                        "Caulerpa pickeringii","Rhipidosiphon javensis","Sargassum pacificum",
+                        "Padina boryana", "Hypnea spinella","Chaetomorpha antennina",
+                        "Boodlea kaeneana","Acanthophora spicifera", "Coelothrix irregularis",
+                        "Gelidiella sp.","Hydroclathrus clathratus", "Dictyota divaricata" ,
+                        "Colpomenia sinuosa")]
+
+head(algae)
+
+
+algae<-subset(algae, habitat!="Outer 10")
+algae<-subset(algae, habitat!="Outer 17")
+algae$total <- rowSums( algae[,6:67] )
+head(algae)
+
+
+try<-cbind(algae[1:5], algae[68])
+try$year<-as.factor(try$year)
+head(try)
+
+try2<-try %>%  group_by(year) %>% 
+  summarise(cover=mean(total)) %>%
+  as.data.frame() #53444
+
+
+```
+
+```{r Summary SE Function}
+#run this function to calculate summary statistics (mean, n, error, etc) for graphing
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+    library(plyr)
+
+    # New version of length which can handle NA's: if na.rm==T, don't count them
+    length2 <- function (x, na.rm=FALSE) {
+        if (na.rm) sum(!is.na(x))
+        else       length(x)
+    }
+
+    # This does the summary. For each group's data frame, return a vector with
+    # N, mean, and sd
+    datac <- ddply(data, groupvars, .drop=.drop,
+      .fun = function(xx, col) {
+        c(N    = length2(xx[[col]], na.rm=na.rm),
+          mean = mean   (xx[[col]], na.rm=na.rm),
+          sd   = sd     (xx[[col]], na.rm=na.rm)
+        )
+      },
+      measurevar
+    )
+
+    # Rename the "mean" column    
+    datac <- plyr::rename(datac, c("mean" = measurevar))
+
+    datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+
+    # Confidence interval multiplier for standard error
+    # Calculate t-statistic for confidence interval: 
+    # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+    ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+    datac$ci <- datac$se * ciMult
+
+    return(datac)
+}
+
+```
+
+```{r graph}
+algae<-subset(try2, taxa=="total")
+
+algae_sum <- summarySE(try, measurevar="total", groupvars=c("year", "habitat")) #summary statistics
+
+algae_sum<-subset(algae_sum, year!="2020")
+
+algae_sum$year<-as.integer((algae_sum$year))
+
+date<-c(algae_sum$year)
+date<-c(2005, 2006, 2007, 2007, 2008, 2008, 2009, 2009, 2010, 2010, 2011, 2011,
+        2012, 2012, 2013, 2013, 2014, 2014, 2015, 2015, 2016, 2016, 2017, 2017,
+        2018, 2018, 2019, 2019, 2021, 2021)
+
+algae_sum<-cbind(algae_sum, date)
+
+ggplot(algae_sum, aes(x=date, y=total, group=habitat, color=habitat, linetype=habitat)) +
+  geom_line()+
+  geom_point()+theme_classic()+
+  scale_color_manual(values=c("#00A4A6", "#004545"))+
+  theme(legend.position = c(.2,.8), legend.title = element_blank())+
+  geom_errorbar(aes(ymin=total-se, ymax=total+se),
+                  width=.2)+
+  ylab("Percent cover")+
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+
+```
+
+
+

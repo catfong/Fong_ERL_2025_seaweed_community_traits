@@ -1,0 +1,21 @@
+---
+title: "2_bbj_data"
+author: "CRF"
+date: "2023-01-26"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+the goal of this script is to read in bbj's data, get it in the right format, and make sure its reading correctly.
+
+```{r read in and formt bbj data}
+bbj<-read.csv("~/Dropbox/bbj/mean-traits-2025-flipped.csv")
+bbj<-column_to_rownames(bbj, var="Species")
+bbj<-t(bbj)
+bbj<-as.data.frame(bbj)
+species_list<-colnames(mcr_data[5:27])
+
+colnames(bbj)<-species_list #this is just to fix the spelling errors
+```
+

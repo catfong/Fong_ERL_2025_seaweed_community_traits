@@ -1,0 +1,205 @@
+---
+title: "Import and format LTER data"
+author: "CRF"
+date: "2023-01-24"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+#**LTER data downloaded January 23, 2023 from mcr-lter website (http://mcrlter.msi.ucsb.edu/cgi-bin/showDataset.cgi?docid=knb-lter-mcr.8&displaymodule=entity&entitytype=dataTable&entityindex=1)
+#Jan 29, 2024 read a notice that the 2020 data is unreliable
+
+The goal of this script is to import the lter data and make it useable for understanding macroalgal community dynamics
+
+```{r pivot into long format and filter for just the algae}
+library(tidyverse)
+
+#read in data
+benthic_data<-read.csv("~/Dropbox/bbj/MCR_LTER_Annual_Survey_Benthic_Cover_20220311.csv")
+#remove redundant columns
+benthic_data<-benthic_data[,c(1, 4, 5, 6, 7, 8, 9)]
+#label columns
+colnames(benthic_data)<-c("year", "site", "habitat", "trans", "quad", "taxa", "per_cover")
+#remove lines where no data was entered (n=1)
+benthic_data<-benthic_data%>%drop_na(per_cover)
+#remove 2020 data
+benthic_data<-subset(benthic_data, year!=2020)
+unique(benthic_data$year) #check
+#look at the taxa
+unique(benthic_data$taxa)
+#make the data long format
+benthic_data<-
+  benthic_data%>%
+  pivot_wider(names_from=taxa, 
+              values_from=per_cover)
+#fill empty spots with 0 coer
+benthic_data[is.na(benthic_data)] <- 0
+#relabel the column names
+algae<-benthic_data[, c("year", "site", "habitat", "trans", "quad",
+                        "Amansia rhodantha", "Turbinaria ornata",  
+                        "Dictyota sp.","Halimeda sp.", "Asparagopsis taxiformis",
+                        "Lobophora variegata", "Peyssonnelia inamoena", "Valonia aegagropila",
+                        "Dichotomaria marginata","Dichotomaria obtusata", 
+                        "Amphiroa fragilissima", "Dictyota friabilis", "Galaxaura sp.",
+                        "Caulerpa serrulata", "Liagora ceranoides", "Halimeda minima",
+                        "Dictyota bartayresiana", "Galaxaura rugosa","Halimeda opuntia",
+                        "Halimeda discoidea","Caulerpa racemosa","Galaxaura filamentosa",
+                        "Valonia ventricosa", "Cladophoropsis membranacea","Martensia elegans",
+                        "Halimeda distorta", "Dictyosphaeria versluysii",  
+                        "Actinotrichia fragilis","Microdictyon umbilicatum", 
+                        "Halimeda incrassata", "Jania sp.", "Dictyosphaeria cavernosa", 
+                        "Halimeda macroloba", "Dictyota hamifera","Gelidiella acerosa",
+                        "Caulerpa peltata" , "Dictyota implexa", "Peyssonnelia bornetii",
+                        "Microdictyon okamurae","Halimeda taenicola", 
+                        "Chlorodesmis fastigiata","Phyllodictyon anastomosans",
+                        "Chnoospora implexa","Codium geppiorum", "Gibsmithia hawaiiensis",
+                        "Peyssonnelia sp.","Cladophoropsis luxurians",
+                        "Neogoniolithon frutescens","Neomeris vanbosseae",
+                        "Caulerpa pickeringii","Rhipidosiphon javensis","Sargassum pacificum",
+                        "Padina boryana", "Hypnea spinella","Chaetomorpha antennina",
+                        "Boodlea kaeneana","Acanthophora spicifera", "Coelothrix irregularis",
+                        "Gelidiella sp.","Hydroclathrus clathratus", "Dictyota divaricata" ,
+                        "Colpomenia sinuosa")]
+#remove anly lines with no algae
+algae[is.na(algae)] <- 0
+
+```
+62 species of macroalgae. It is likely a good idea to filter out the ones that are super rare.
+1) filter to back and fringing reefs
+2) calculate percent of macroalgal community
+4) check for commonality to develop some threshold
+
+currently at 62 species.
+```{r }
+library(dplyr)
+#sum the algae percent
+algae$total <- rowSums( algae[,6:67] )
+#remove all but backreef
+algae<-subset(algae, habitat!=c("Outer 10")) 
+algae<-subset(algae, habitat!=c("Outer 17")) 
+#algae<-subset(algae, habitat!=c("Fringing")) #make sure this is what you want!
+
+#make sure all rows with no data are gone
+algae<-subset(algae, total!=0) 
+
+#461 data points
+
+#calculate the percent of the benthos that is that algae
+per<-algae%>%mutate_at(vars(6:68),list(percent=~./total*100))
+#extract just the columns with % cover
+per<-per[69:130]
+#rename the columns
+colnames(per)<-c("Amansia rhodantha", "Turbinaria ornata",  
+                        "Dictyota sp.","Halimeda sp.", "Asparagopsis taxiformis",
+                        "Lobophora variegata", "Peyssonnelia inamoena", "Valonia aegagropila",
+                        "Dichotomaria marginata","Dichotomaria obtusata", 
+                        "Amphiroa fragilissima", "Dictyota friabilis", "Galaxaura sp.",
+                        "Caulerpa serrulata", "Liagora ceranoides", "Halimeda minima",
+                        "Dictyota bartayresiana", "Galaxaura rugosa","Halimeda opuntia",
+                        "Halimeda discoidea","Caulerpa racemosa","Galaxaura filamentosa",
+                        "Valonia ventricosa", "Cladophoropsis membranacea","Martensia elegans",
+                        "Halimeda distorta", "Dictyosphaeria versluysii",  
+                        "Actinotrichia fragilis","Microdictyon umbilicatum", 
+                        "Halimeda incrassata", "Jania sp.", "Dictyosphaeria cavernosa", 
+                        "Halimeda macroloba", "Dictyota hamifera","Gelidiella acerosa",
+                        "Caulerpa peltata" , "Dictyota implexa", "Peyssonnelia bornetii",
+                        "Microdictyon okamurae","Halimeda taenicola", 
+                        "Chlorodesmis fastigiata","Phyllodictyon anastomosans",
+                        "Chnoospora implexa","Codium geppiorum", "Gibsmithia hawaiiensis",
+                        "Peyssonnelia sp.","Cladophoropsis luxurians",
+                        "Neogoniolithon frutescens","Neomeris vanbosseae",
+                        "Caulerpa pickeringii","Rhipidosiphon javensis","Sargassum pacificum",
+                        "Padina boryana", "Hypnea spinella","Chaetomorpha antennina",
+                        "Boodlea kaeneana","Acanthophora spicifera", "Coelothrix irregularis",
+                        "Gelidiella sp.","Hydroclathrus clathratus", "Dictyota divaricata" ,
+                        "Colpomenia sinuosa")
+
+#reassemble the dataset
+algae_data<-cbind(algae[1:5], per)
+
+
+```
+
+
+```{r aggregate by quadrant and then check for abundances}
+library(dplyr)
+
+#reformat data to long form
+algae_long<-
+  algae_data%>%
+  pivot_longer(cols=6:67, 
+               names_to="taxa",
+              values_to="per_cover") #289863
+
+#calculate averages based on transect (dropping quadrant)
+algae_long<-algae_long %>% group_by(year,site, habitat, trans, taxa) %>% 
+  summarise(cover=mean(per_cover)) %>%
+  as.data.frame() #53444
+
+#now we are going to look at % of TOTAL benthos (not just % of algal community) to generate thresholds/cuttoffs
+
+#pivot algae dataset
+thresholds<-
+  algae%>%
+  pivot_longer(cols=6:67, 
+               names_to="taxa",
+              values_to="per_cover") #150660
+
+#calcualte averages based on transect (droping quadrant)
+thresholds<-thresholds %>% group_by(year,site, habitat, trans, taxa) %>% 
+  summarise(cover=mean(per_cover)) %>%
+  as.data.frame() #27962
+
+#max levels
+max<-aggregate(thresholds$cover, by = list(thresholds$taxa), max)
+colnames(max)<-c("species", "max_cover")
+max<-max[order(max$max_cover,decreasing=FALSE),]
+max
+#setting to a minimum of 5% transect
+max<-subset(max, max_cover>=5)
+#list of species to keep
+species_to_keep<-c(max$species)
+##by dropping 2020 data, we lose padina!
+#back to the dataset calculated as % of algal community
+algae_long<-subset(algae_long, taxa %in% species_to_keep)
+
+unique(algae_long$taxa)
+
+algae_wide<-
+  algae_long%>%
+  pivot_wider(names_from=taxa, 
+              values_from=cover)
+
+```
+
+#reduction to 28 species.Some details: 
+--> combine the two peysionellas
+--> need to decide what to do with Dictyota sp and Halimeda sp. Option 1: take means of their congeners (D. bartayresiana is the only one but we also have friabilis... H. discoidea, distorta, minima, incrassata, opuntia but we also have macroloba, taenicola, tuna). Option 2: make all  dictyota sp and halimeda sp
+--> h. distorta is a synonym for h. incressata
+
+#combine peyssonnelia
+#dictyota (putatively barya)
+#genera mean for halimeda sp, sensitivity tests to confirm
+
+```{r reducing repeated genera}
+
+algae_wide$`Dictyota bartayresiana`<-algae_wide$`Dictyota bartayresiana`+algae_wide$`Dictyota sp.`
+algae_wide<-(algae_wide[,!names(algae_wide) %in%  c("Dictyota sp.")])
+
+algae_wide$`Peyssonnelia spp`<-algae_wide$`Peyssonnelia bornetii`+algae_wide$`Peyssonnelia inamoena`+algae_wide$`Peyssonnelia sp.`
+algae_wide<-(algae_wide[,!names(algae_wide) %in%  
+                          c("Peyssonnelia bornetii","Peyssonnelia inamoena","Peyssonnelia sp.")])
+
+algae_wide$`Halimeda incrassata`<-algae_wide$`Halimeda incrassata`+algae_wide$`Halimeda distorta`
+algae_wide<-(algae_wide[,!names(algae_wide) %in%  c("Halimeda distorta")])
+
+algae_sp<-algae_wide[5:27] #28 if include fringing
+
+new_order = sort(colnames(algae_sp),decreasing=FALSE)
+df2 <- algae_sp[, new_order]
+
+algae_wide<-cbind(algae_wide[1:4], df2)
+
+mcr_data<-algae_wide
+````
